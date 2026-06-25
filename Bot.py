@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # ============================================================
-# مجازی شمېرې بوټ - ټول په یو فایل کې (د کارونکي + اتومات)
+# مجازی شمېرې بوټ - ټول په یو فایل کې (د countryflag پرته)
 # ============================================================
 
 # -------------------- ۱. کتابتونونه --------------------
@@ -17,7 +17,6 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import requests
 import phonenumbers
-import countryflag
 
 # ============================================================
 # -------------------- ۲. تنظیمات (Config) --------------------
@@ -53,6 +52,20 @@ COUNTRIES = {
     "هند": 6,
     "پاکستان": 15,
     "ازبکستان": 17,
+}
+
+# د هیوادونو نښې (Flags) - د countryflag پرته
+COUNTRY_FLAGS = {
+    "افغانستان": "🇦🇫",
+    "روسیه": "🇷🇺",
+    "اوکراین": "🇺🇦",
+    "قزاقستان": "🇰🇿",
+    "امریکا": "🇺🇸",
+    "انګلستان": "🇬🇧",
+    "چین": "🇨🇳",
+    "هند": "🇮🇳",
+    "پاکستان": "🇵🇰",
+    "ازبکستان": "🇺🇿",
 }
 
 # د خدماتو نومونه (لکه څنګه چې OnlineSim پېژني)
@@ -307,7 +320,8 @@ def show_countries(message):
         return
     text = "🌍 **شته هیوادونه:**\n\n"
     for country in COUNTRIES.keys():
-        text += f"• {country}\n"
+        flag = COUNTRY_FLAGS.get(country, "🌍")
+        text += f"{flag} {country}\n"
     user_bot.reply_to(message, text, parse_mode="Markdown")
 
 @user_bot.message_handler(func=lambda m: m.text == "📞 نوی مجازی شمېره")
@@ -333,7 +347,8 @@ def select_service(call):
     user_bot.answer_callback_query(call.id, f"خدمت {service} انتخاب شو")
     markup = InlineKeyboardMarkup(row_width=2)
     for country in COUNTRIES.keys():
-        markup.add(InlineKeyboardButton(country, callback_data=f"country_{country}_{service}"))
+        flag = COUNTRY_FLAGS.get(country, "🌍")
+        markup.add(InlineKeyboardButton(f"{flag} {country}", callback_data=f"country_{country}_{service}"))
     user_bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
@@ -362,13 +377,12 @@ def select_country(call):
         tzid = result["tzid"]
         add_number(phone, country, service, tzid)
         update_user_request(request_id, phone)
+        flag = COUNTRY_FLAGS.get(country, "🌍")
         try:
             parsed = phonenumbers.parse(f"+{phone}")
             formatted = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
-            flag = countryflag.getflag(phonenumbers.region_code_for_country_code(parsed.country_code))
         except:
             formatted = f"+{phone}"
-            flag = "🌍"
         markup = InlineKeyboardMarkup(row_width=2)
         markup.add(
             InlineKeyboardButton("📥 پیغامونه (Inbox)", callback_data=f"inbox_{tzid}_{phone}"),
@@ -431,7 +445,8 @@ def my_numbers(message):
         return
     text = "📋 **ستاسو فعالې شمېرې:**\n\n"
     for num in numbers:
-        text += f"📞 +{num['phone_number']}\n"
+        flag = COUNTRY_FLAGS.get(num['country'], "🌍")
+        text += f"{flag} +{num['phone_number']}\n"
         text += f"   🌍 {num['country']} | 📱 {num['service']}\n"
         text += f"   ⏳ پای: {num['expires_at']}\n\n"
     user_bot.reply_to(message, text, parse_mode="Markdown")
@@ -544,7 +559,8 @@ def auto_stats_command(message):
     text += f"📞 ټول فعالې شمېرې: {total}\n\n"
     text += "**د هیوادونو له مخې:**\n"
     for country, count in country_stats.items():
-        text += f"• {country}: {count}\n"
+        flag = COUNTRY_FLAGS.get(country, "🌍")
+        text += f"{flag} {country}: {count}\n"
     auto_bot.reply_to(message, text, parse_mode="Markdown")
 
 # ============================================================
