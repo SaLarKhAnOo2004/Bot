@@ -3,50 +3,46 @@
 
 import telebot
 import requests
-import time
 import re
+import time
+import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # ============================================
-# تنظیمات - خپل توکن او آئی ډی دلته دننه کړئ
+# تنظیمات - خپل توکن دلته دننه کړئ
 # ============================================
 USER_BOT_TOKEN = "8540384399:AAEFZh1kne1KgXgDkXvzaesUg6GBOSNO0Fg"
 ADMIN_IDS = [5887665463]
 
-# که د 5sim API کیلي لرئ، دلته یې دننه کړئ (که نه لرئ، هماغسې پرېږدئ)
-FIVESIM_API_KEY = ""  # که نه لرئ، خالي پرېږدئ
-
 # ============================================
-# د هیوادونو او خدماتو کوډونه
+# د هیوادونو لیست (د ویب پاڼو سره سم)
 # ============================================
 COUNTRIES = {
-    "روسیه": 0,
-    "اوکراین": 1,
-    "قزاقستان": 2,
-    "امریکا": 3,
-    "انګلستان": 4,
-    "افغانستان": 18,
+    "روسیه": "russia",
+    "امریکا": "usa",
+    "انګلستان": "uk",
+    "افغانستان": "afghanistan",
+    "هند": "india",
+    "پاکستان": "pakistan",
 }
 
 FLAGS = {
-    "روسیه": "🇷🇺", "اوکراین": "🇺🇦", "قزاقستان": "🇰🇿",
-    "امریکا": "🇺🇸", "انګلستان": "🇬🇧", "افغانستان": "🇦🇫"
+    "روسیه": "🇷🇺", "امریکا": "🇺🇸", "انګلستان": "🇬🇧",
+    "افغانستان": "🇦🇫", "هند": "🇮🇳", "پاکستان": "🇵🇰"
 }
 
 SERVICES = {
-    "telegram": 1,
-    "whatsapp": 2,
-    "facebook": 3,
-    "instagram": 4,
-    "gmail": 5,
+    "telegram": "tg",
+    "whatsapp": "wa",
+    "facebook": "fb",
+    "instagram": "ig",
 }
 
-# تضمیني ترکیبونه (تل شته)
-GUARANTEED_COMBOS = [
-    ("روسیه", "telegram"),
-    ("روسیه", "whatsapp"),
-    ("امریکا", "telegram"),
-    ("انګلستان", "telegram"),
+# د وړیا ویب پاڼو لیست
+FREE_SITES = [
+    "https://receive-sms-online.cc",
+    "https://temp-number.org",
+    "https://textnow.com",
 ]
 
 # ============================================
@@ -55,78 +51,82 @@ GUARANTEED_COMBOS = [
 bot = telebot.TeleBot(USER_BOT_TOKEN)
 
 # ============================================
-# د API دندې
+# له وړیا ویب پاڼو څخه شمېرې راټولول
 # ============================================
 
-def get_from_onlinesim(country_code, service_code):
-    """د OnlineSim څخه شمېره ترلاسه کوي"""
-    url = "https://onlinesim.io/api/getNum.php"
-    params = {"service": service_code, "country": country_code, "operator": "any"}
+def get_free_number(country_name, service_name):
+    """له وړیا ویب پاڼو څخه شمېره ترلاسه کوي"""
+    country_en = COUNTRIES.get(country_name, "russia")
+    service_short = SERVICES.get(service_name.lower(), "tg")
+    
+    # لومړۍ ویب پاڼه: receive-sms-online.cc
     try:
-        r = requests.get(url, params=params, timeout=10)
-        data = r.json()
-        if data.get("response") == "1":
-            return {"success": True, "number": data["number"], "tzid": data["tzid"], "source": "OnlineSim"}
-        else:
-            return {"success": False, "error": data.get("msg", "نامعلومه")}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-def get_from_fivesim(country_code, service_code):
-    """د 5sim څخه شمېره ترلاسه کوي (که API کیلي شتون ولري)"""
-    if not FIVESIM_API_KEY:
-        return {"success": False, "error": "5sim API کیلي نشته"}
-    # د 5sim لپاره د هیواد نوم بدلول (د دوی کوډونه توپیر لري)
-    country_map = {0: "ru", 1: "ua", 2: "kz", 3: "us", 4: "uk", 18: "af"}
-    service_map = {1: "telegram", 2: "whatsapp", 3: "facebook", 4: "instagram", 5: "gmail"}
-    country = country_map.get(country_code, "ru")
-    service = service_map.get(service_code, "telegram")
-    url = f"https://5sim.net/v1/user/buy/activation/{country}/{service}/any"
-    headers = {"Authorization": f"Bearer {FIVESIM_API_KEY}"}
-    try:
+        url = f"https://receive-sms-online.cc/{service_short}/"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         r = requests.get(url, headers=headers, timeout=10)
-        data = r.json()
-        if "phone" in data and "id" in data:
-            return {"success": True, "number": data["phone"], "tzid": data["id"], "source": "5sim"}
-        else:
-            return {"success": False, "error": data.get("detail", "نامعلومه")}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-def get_number(country_name, service_name):
-    """د دواړو سرچینو څخه شمېره ترلاسه کوي"""
-    country_code = COUNTRIES.get(country_name)
-    service_code = SERVICES.get(service_name.lower())
-    if country_code is None or service_code is None:
-        return {"success": False, "error": "هیواد یا خدمت ونه موندل شو"}
-    
-    # لومړی OnlineSim
-    result = get_from_onlinesim(country_code, service_code)
-    if result["success"]:
-        return result
-    
-    # که OnlineSim ناکامه شو، 5sim
-    result = get_from_fivesim(country_code, service_code)
-    if result["success"]:
-        return result
-    
-    # که دواړه ناکامه شول
-    return {"success": False, "error": "هیڅ سرچینه شمېره ونه موندله"}
-
-def get_inbox(tzid):
-    """د OnlineSim څخه پیغامونه ترلاسه کوي"""
-    url = "https://onlinesim.io/api/getMessages.php"
-    try:
-        r = requests.get(url, params={"tzid": tzid}, timeout=10)
-        data = r.json()
-        return data if isinstance(data, list) else []
+        
+        # د شمېرو استخراج
+        numbers = re.findall(r'<span class="number">\+?(\d+)</span>', r.text)
+        if numbers:
+            return {
+                "success": True,
+                "number": numbers[0],
+                "source": "receive-sms-online.cc",
+                "url": url,
+                "country": country_name,
+                "service": service_name
+            }
     except:
-        return []
+        pass
+    
+    # دوهمه ویب پاڼه: temp-number.org
+    try:
+        url = f"https://temp-number.org/{country_en}/"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        numbers = re.findall(r'<div class="number">\+?(\d+)</div>', r.text)
+        if numbers:
+            return {
+                "success": True,
+                "number": numbers[0],
+                "source": "temp-number.org",
+                "url": url,
+                "country": country_name,
+                "service": service_name
+            }
+    except:
+        pass
+    
+    # که هیڅ شمېره ونه موندل شوه
+    return {"success": False, "error": "په وړیا ویب پاڼو کې شمېره ونه موندله"}
 
-def extract_code(text):
-    """د متن څخه د ۴-۶ عددونو کوډ استخراج کوي"""
-    match = re.search(r'\b(\d{4,6})\b', text)
-    return match.group(1) if match else None
+def get_all_free_numbers(country_name, service_name):
+    """له ټولو سرچینو څخه شمېرې راټولوي"""
+    results = []
+    
+    # 1. receive-sms-online.cc
+    try:
+        service_short = SERVICES.get(service_name.lower(), "tg")
+        url = f"https://receive-sms-online.cc/{service_short}/"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=10)
+        numbers = re.findall(r'<span class="number">\+?(\d+)</span>', r.text)
+        for num in numbers[:3]:
+            results.append({"number": num, "source": "receive-sms-online.cc", "url": url})
+    except:
+        pass
+    
+    # 2. temp-number.org
+    try:
+        country_en = COUNTRIES.get(country_name, "russia")
+        url = f"https://temp-number.org/{country_en}/"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        numbers = re.findall(r'<div class="number">\+?(\d+)</div>', r.text)
+        for num in numbers[:3]:
+            results.append({"number": num, "source": "temp-number.org", "url": url})
+    except:
+        pass
+    
+    return results
 
 # ============================================
 # د بوټ امرونه
@@ -139,14 +139,18 @@ def start_command(message):
         return
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(
-        KeyboardButton("📞 نوی مجازی شمېره"),
+        KeyboardButton("📞 نوی وړیا شمېره"),
         KeyboardButton("🌍 هیوادونه"),
+        KeyboardButton("📡 ټولې سرچینې"),
         KeyboardButton("❓ مرسته")
     )
     bot.reply_to(message,
-        "🌟 **مجازی شمېرې بوټ**\n\n"
-        "د نوي شمېرې لپاره تڼۍ وکاروئ.\n"
-        "که شمېره ترلاسه نشي، نو **روسیه + telegram** یا **روسیه + whatsapp** وکاروئ.",
+        "🌟 **وړیا مجازی شمېرې بوټ**\n\n"
+        "دې بوټ له **وړیا ویب پاڼو** څخه شمېرې راوباسي:\n"
+        "• receive-sms-online.cc\n"
+        "• temp-number.org\n\n"
+        "⚠️ **یادونه:** دا شمېرې عامه دي او ممکن پیغامونه د نورو سره شریک وي.\n"
+        "د پیغامونو لیدلو لپاره په ورکړل شوي لینک کلیک وکړئ.",
         parse_mode="Markdown",
         reply_markup=markup
     )
@@ -158,7 +162,17 @@ def show_countries(message):
         text += f"{FLAGS.get(c, '🌍')} {c}\n"
     bot.reply_to(message, text, parse_mode="Markdown")
 
-@bot.message_handler(func=lambda m: m.text == "📞 نوی مجازی شمېره")
+@bot.message_handler(func=lambda m: m.text == "📡 ټولې سرچینې")
+def show_sources(message):
+    text = (
+        "📡 **وړیا سرچینې:**\n\n"
+        "1. **receive-sms-online.cc** - مشهوره ویب پاڼه\n"
+        "2. **temp-number.org** - بله وړیا پاڼه\n\n"
+        "دا پاڼې تاسو ته وړیا شمېرې درکوي، خو عامه دي."
+    )
+    bot.reply_to(message, text)
+
+@bot.message_handler(func=lambda m: m.text == "📞 نوی وړیا شمېره")
 def new_number(message):
     markup = InlineKeyboardMarkup(row_width=2)
     for s in SERVICES.keys():
@@ -188,51 +202,38 @@ def select_country(callback):
     service = parts[2]
     bot.answer_callback_query(callback.id, f"هیواد {country} انتخاب شو")
     
-    # د انتظار پیغام
-    try:
-        msg = bot.edit_message_text(
-            f"⏳ د **{country}** لپاره د **{service}** شمېره ترلاسه کېږي...\nمهرباني وکړئ انتظار وکړئ.",
-            callback.message.chat.id,
-            callback.message.message_id,
-            parse_mode="Markdown"
-        )
-    except:
-        msg = bot.send_message(
-            callback.message.chat.id,
-            f"⏳ د **{country}** لپاره د **{service}** شمېره ترلاسه کېږي...\nمهرباني وکړئ انتظار وکړئ.",
-            parse_mode="Markdown"
-        )
+    msg = bot.edit_message_text(
+        f"⏳ د **{country}** لپاره د **{service}** وړیا شمېره ترلاسه کېږي...\n"
+        "له وړیا ویب پاڼو څخه چیک کیږي...",
+        callback.message.chat.id,
+        callback.message.message_id,
+        parse_mode="Markdown"
+    )
     
     # شمېره ترلاسه کول
-    result = get_number(country, service)
+    result = get_free_number(country, service)
     
     if result["success"]:
         phone = result["number"]
-        tzid = result["tzid"]
-        source = result.get("source", "نامعلومه")
-        
-        # د شمېرې بڼه ښایسته کول
-        try:
-            import phonenumbers
-            parsed = phonenumbers.parse(f"+{phone}")
-            formatted = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
-        except:
-            formatted = f"+{phone}"
+        source = result["source"]
+        url = result.get("url", "#")
         
         flag = FLAGS.get(country, "🌍")
-        markup = InlineKeyboardMarkup(row_width=2)
+        markup = InlineKeyboardMarkup(row_width=1)
         markup.add(
-            InlineKeyboardButton("📥 پیغامونه (Inbox)", callback_data=f"inbox_{tzid}_{phone}"),
-            InlineKeyboardButton("🔄 نوې شمېره", callback_data=f"new_{service}_{country}"),
-            InlineKeyboardButton("ℹ️ پروفایل", url=f"tg://resolve?phone=+{phone}")
+            InlineKeyboardButton("🌐 پیغامونه وګورئ", url=url),
+            InlineKeyboardButton("🔄 نوې شمېره", callback_data=f"new_{service}_{country}")
         )
         
         bot.edit_message_text(
-            f"{flag} **ستاسو مجازی شمېره:**\n`{formatted}`\n\n"
+            f"{flag} **ستاسو وړیا مجازی شمېره:**\n`{phone}`\n\n"
             f"📱 خدمت: **{service}**\n"
             f"🌍 هیواد: **{country}**\n"
-            f"📡 سرچینه: {source}\n\n"
-            "د تایید کوډ ترلاسه کولو لپاره، په همدې شمېره یې واستوئ او بیا د **'پیغامونه'** تڼۍ کېکاږئ.",
+            f"📡 سرچینه: **{source}**\n\n"
+            "🔴 **مهم:**\n"
+            "• دا شمېره عامه ده (نور خلک هم کاروي)\n"
+            "• د پیغامونو لیدلو لپاره لاندې تڼۍ کلیک کړئ\n"
+            "• په ویب پاڼه کې خپله شمېره ومومئ او پیغامونه وګورئ",
             callback.message.chat.id,
             msg.message_id,
             parse_mode="Markdown",
@@ -240,57 +241,28 @@ def select_country(callback):
         )
     else:
         error = result.get("error", "نامعلومه")
-        
-        # د تضمیني ترکیبونو لست
-        combo_text = ""
-        for c, s in GUARANTEED_COMBOS:
-            combo_text += f"• {FLAGS.get(c, '🌍')} {c} + {s}\n"
-        
         bot.edit_message_text(
             f"❌ **شمېره ترلاسه نه شوه.**\n\n"
             f"خطا: `{error}`\n\n"
-            "**لاندې ترکیبونه ازمایئ (تقریباً تل شته):**\n"
-            f"{combo_text}\n"
-            "که بیا هم کار ونه کړي، نو د OnlineSim API محدودیتونه دي. یو څه انتظار وکړئ او بیا هڅه وکړئ.",
+            "**لارښوونه:**\n"
+            "• په وړیا ویب پاڼو کې ممکن شمېرې پای ته رسېدلي وي.\n"
+            "• بل هیواد یا خدمت وکاروئ.\n"
+            "• روسیه + telegram یا امریکا + telegram ازمایئ.\n\n"
+            "تاسو کولی شئ په لاسي ډول دې پاڼو ته لاړ شئ:\n"
+            "• https://receive-sms-online.cc\n"
+            "• https://temp-number.org",
             callback.message.chat.id,
             msg.message_id,
             parse_mode="Markdown"
         )
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("inbox_"))
-def show_inbox(callback):
-    parts = callback.data.split("_")
-    tzid = parts[1]
-    phone = parts[2] if len(parts) > 2 else None
-    bot.answer_callback_query(callback.id, "پیغامونه راوړل کیږي...")
-    
-    messages = get_inbox(tzid)
-    if messages:
-        for msg in messages[:5]:
-            text = msg.get("text", "پیغام نشته")
-            date = msg.get("date", "نامعلوم وخت")
-            code = extract_code(text)
-            
-            msg_text = f"📩 **نېټه:** {date}\n"
-            if code:
-                msg_text += f"🔑 **تایید کوډ:** `{code}`\n"
-            msg_text += f"📝 **متن:** {text}"
-            bot.send_message(callback.message.chat.id, msg_text, parse_mode="Markdown")
-    else:
-        bot.send_message(
-            callback.message.chat.id,
-            "📭 د دې شمېرې لپاره هېڅ پیغام نشته.\n"
-            "که تاسو تایید کوډ واستولی وي، مهرباني وکړئ یو څه انتظار وکړئ او بیا هڅه وکړئ."
-        )
-
 @bot.callback_query_handler(func=lambda c: c.data.startswith("new_"))
 def renew_number(callback):
     parts = callback.data.split("_")
-    service = parts[1]
-    country = parts[2]
+    service = parts[1] if len(parts) > 1 else "telegram"
+    country = parts[2] if len(parts) > 2 else "روسیه"
     bot.answer_callback_query(callback.id, "نوې شمېره ترلاسه کیږي...")
     
-    # د هیواد بیا انتخاب
     markup = InlineKeyboardMarkup(row_width=2)
     for country_name in COUNTRIES.keys():
         flag = FLAGS.get(country_name, "🌍")
@@ -308,21 +280,23 @@ def renew_number(callback):
 def help_command(message):
     bot.reply_to(message,
         "🔧 **لارښود:**\n\n"
-        "1. 'نوی مجازی شمېره' کلیک کړئ\n"
-        "2. خدمت وټاکئ (telegram، whatsapp، facebook، instagram، gmail)\n"
+        "1. 'نوی وړیا شمېره' کلیک کړئ\n"
+        "2. خدمت وټاکئ (telegram، whatsapp، facebook، instagram)\n"
         "3. هیواد وټاکئ\n"
         "4. که شمېره ترلاسه نشي، دا ترکیبونه ازمایئ:\n"
         "   • روسیه + telegram\n"
         "   • روسیه + whatsapp\n"
         "   • امریکا + telegram\n"
-        "5. د تایید کوډ ترلاسه کولو لپاره 'پیغامونه' تڼۍ وکاروئ.\n\n"
-        "⚠️ **یادونه:** دا شمېرې وړیا دي او ممکن محدودیتونه ولري."
+        "5. د پیغامونو لیدلو لپاره 'پیغامونه وګورئ' تڼۍ کلیک کړئ\n\n"
+        "⚠️ **مهم:** دا شمېرې عامه دي! که پیغام ونه مومئ، نو بل څوک یې ترلاسه کړی دی."
     )
 
 # ============================================
 # بوټ چلول
 # ============================================
 if __name__ == "__main__":
-    print("✅ بوټ پیل شو...")
-    print(f"د کارونکي بوټ: @{USER_BOT_TOKEN.split(':')[0]}")
+    print("✅ وړیا بوټ پیل شو...")
+    print("📡 له وړیا ویب پاڼو څخه شمېرې راوباسي:")
+    print("   • receive-sms-online.cc")
+    print("   • temp-number.org")
     bot.infinity_polling()
