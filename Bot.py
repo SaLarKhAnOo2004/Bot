@@ -2,34 +2,32 @@
 # -*- coding: utf-8 -*-
 
 # ============================================================
-# مجازی شمېرې بوټ - ټول په یو فایل کې (د countryflag پرته)
+# مجازی شمېرې بوټ - بشپړ او اصلاح شوی (د ټولو خطاوو پرته)
 # ============================================================
 
 # -------------------- ۱. کتابتونونه --------------------
 import sqlite3
-import json
 import time
 import threading
 import re
 from datetime import datetime, timedelta
-
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import requests
 import phonenumbers
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # ============================================================
 # -------------------- ۲. تنظیمات (Config) --------------------
 # ============================================================
 
-# د Telegram بوټ توکنونه
-USER_BOT_TOKEN = "8540384399:AAEFZh1kne1KgXgDkXvzaesUg6GBOSNO0Fg"  # د کارونکي بوټ
-AUTO_BOT_TOKEN = "8890120628:AAFf-cLeuNw1PXLKGN9L6nDVR26L-3yNzn0"  # د اتومات بوټ
+# د Telegram بوټ توکنونه - خپل توکنونه دلته دننه کړئ
+USER_BOT_TOKEN = "8540384399:AAEFZh1kne1KgXgDkXvzaesUg6GBOSNO0Fg"   # د کارونکي بوټ
+AUTO_BOT_TOKEN = "8890120628:AAFf-cLeuNw1PXLKGN9L6nDVR26L-3yNzn0"   # د اتومات بوټ
 
 # د مدیرانو ID لیست (یوازې دا کسان کولای شي بوټ وکاروي)
 ADMIN_IDS = [5887665463]  # خپل Telegram ID دلته دننه کړئ
 
-# د OnlineSim API تنظیمات (که API کیلي لرئ)
+# د OnlineSim API تنظیمات (که API کیلي لرئ، دلته یې دننه کړئ)
 ONLINESIM_API_KEY = ""  # که نه لرئ، خالي پرېږدئ
 ONLINESIM_BASE_URL = "https://onlinesim.io/api"
 
@@ -569,7 +567,8 @@ def auto_stats_command(message):
 
 def run_user_bot():
     print("✅ د کارونکي بوټ پیل شو...")
-    user_bot.infinity_polling(skip_pending=True)
+    # د skip_pending پرته - په نویو نسخو کې not supported
+    user_bot.infinity_polling()
 
 def run_auto_bot():
     # د اتومات پروسې په جلا تارونو کې پیل کول
@@ -577,7 +576,7 @@ def run_auto_bot():
     threading.Thread(target=auto_check_messages, daemon=True).start()
     print("✅ د اتومات بوټ پیل شو...")
     print("🔄 د شمېرو راټولونکی او پیغام چیک کونکی فعال شو.")
-    auto_bot.infinity_polling(skip_pending=True)
+    auto_bot.infinity_polling()
 
 if __name__ == "__main__":
     init_database()
