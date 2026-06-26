@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-د Fakemail بوټ - بشپړ نسخه
+د Fakemail بوټ - د عادي کیبورد مینو سره
 ټولې دندې: /generate, /id, /set, /phone, /domain, /block, /about, /transfer
 """
 
@@ -8,11 +8,10 @@ import json
 import random
 import string
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
-    CallbackQueryHandler,
     MessageHandler,
     filters,
     ContextTypes
@@ -78,136 +77,81 @@ def get_message_content(email, password, message_id):
         return response.json().get("text", "")
     return None
 
+# ---------- د عادي کیبورد جوړول ----------
+def get_main_keyboard():
+    """د تل لپاره ښکاره کیدونکی کیبورد (مینو)"""
+    keyboard = [
+        [KeyboardButton("📧 Get a new fake mail id")],
+        [KeyboardButton("🆔 Current fake mail id")],
+        [KeyboardButton("⚙️ Setup custom fake mail id")],
+        [KeyboardButton("📱 Add/update recovery phone")],
+        [KeyboardButton("🌐 Manage custom domains")],
+        [KeyboardButton("🚫 Manage Blocklist")],
+        [KeyboardButton("ℹ️ About this bot")],
+        [KeyboardButton("🔄 Transfer Address")],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
 # ---------- د بوټ کمانډونه ----------
 
-# د /start کمانډ - اصلي مینو
+# د /start کمانډ - مینو ښکاره کول
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("📧 Get a new fake mail id", callback_data='generate')],
-        [InlineKeyboardButton("🆔 Current fake mail id", callback_data='id')],
-        [InlineKeyboardButton("⚙️ Setup custom fake mail id", callback_data='set')],
-        [InlineKeyboardButton("📱 Add/update recovery phone", callback_data='phone')],
-        [InlineKeyboardButton("🌐 Manage custom domains", callback_data='domain')],
-        [InlineKeyboardButton("🚫 Manage Blocklist", callback_data='block')],
-        [InlineKeyboardButton("ℹ️ About this bot", callback_data='about')],
-        [InlineKeyboardButton("🔄 Transfer Address", callback_data='transfer')],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "👋 *سلام! د Fakemail بوټ ته ښه راغلاست!*\n\n"
-        "لاندې له مینو څخه خپل مطلوب کار غوره کړئ:",
-        reply_markup=reply_markup,
+        "لاندې له مینو څخه خپل مطلوب کار غوره کړئ:\n"
+        "(هره تڼۍ یو کمانډ لیږي)",
+        reply_markup=get_main_keyboard(),
         parse_mode="Markdown"
     )
 
-# د تڼیو اداره کول (د مینو کلیکونو لپاره)
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = str(query.from_user.id)
+# د /generate کمانډ
+async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
     data = load_data()
     user_info = data.get(user_id, {})
 
-    if query.data == 'generate':
-        await query.edit_message_text("⏳ *نوی برېښنالیک جوړیږي...*", parse_mode="Markdown")
-        new_acc = create_account()
-        if new_acc:
-            user_info['email'] = new_acc['address']
-            user_info['password'] = new_acc['password']
-            user_info['last_count'] = 0
-            data[user_id] = user_info
-            save_data(data)
-            await query.edit_message_text(
-                f"✅ *نوی برېښنالیک جوړ شو!*\n\n"
-                f"📧 `{new_acc['address']}`\n"
-                f"🔑 پټنوم: `{new_acc['password']}`\n\n"
-                "_پټنوم په خوندي ځای کې وساتئ._",
-                parse_mode="Markdown"
-            )
-        else:
-            await query.edit_message_text("❌ د برېښنالیک جوړول ناکام شول. بیا هڅه وکړئ.")
-
-    elif query.data == 'id':
-        email = user_info.get('email', 'هیڅ برېښنالیک نشته. لومړی /generate وکاروئ.')
-        await query.edit_message_text(
-            f"🆔 *ستاسو اوسنی برېښنالیک پته:*\n\n`{email}`",
+    await update.message.reply_text("⏳ *نوی برېښنالیک جوړیږي...*", parse_mode="Markdown")
+    new_acc = create_account()
+    if new_acc:
+        user_info['email'] = new_acc['address']
+        user_info['password'] = new_acc['password']
+        user_info['last_count'] = 0
+        data[user_id] = user_info
+        save_data(data)
+        await update.message.reply_text(
+            f"✅ *نوی برېښنالیک جوړ شو!*\n\n"
+            f"📧 `{new_acc['address']}`\n"
+            f"🔑 پټنوم: `{new_acc['password']}`\n\n"
+            "_پټنوم په خوندي ځای کې وساتئ._",
             parse_mode="Markdown"
         )
+    else:
+        await update.message.reply_text("❌ د برېښنالیک جوړول ناکام شول. بیا هڅه وکړئ.")
 
-    elif query.data == 'set':
-        context.user_data['awaiting_set'] = True
-        await query.edit_message_text(
-            "⚙️ *د دودیز برېښنالیک تنظیمول*\n\n"
-            "مهرباني وکړئ خپل مطلوب نوم (د '@' پرته) ولیکئ.\n"
-            "بڼه به داسې وي: `yourname@mail.tm`\n\n"
-            "مثال: `ahmad`\n"
-            "د لغوه کولو لپاره /cancel وکاروئ.",
-            parse_mode="Markdown"
-        )
+# د /id کمانډ
+async def show_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    data = load_data()
+    user_info = data.get(user_id, {})
+    email = user_info.get('email', 'هیڅ برېښنالیک نشته. لومړی /generate وکاروئ.')
+    await update.message.reply_text(
+        f"🆔 *ستاسو اوسنی برېښنالیک پته:*\n\n`{email}`",
+        parse_mode="Markdown"
+    )
 
-    elif query.data == 'phone':
-        context.user_data['awaiting_phone'] = True
-        await query.edit_message_text(
-            "📱 *د بیا رغونې شمېره اضافه/تازه کول*\n\n"
-            "مهرباني وکړئ خپل د تلیفون شمېره د هیواد کوډ سره ولیکئ.\n"
-            "بڼه: `+937XXXXXXXX`\n"
-            "د لغوه کولو لپاره /cancel وکاروئ.",
-            parse_mode="Markdown"
-        )
-
-    elif query.data == 'domain':
-        domains = ["mail.tm", "geek.it", "slushmail.com"]
-        text = "🌐 *د موجودو دامنو لیست:*\n\n"
-        for d in domains:
-            text += f"• `{d}`\n"
-        text += "\n_د دامن بدلول یوازې د تادیه شوي پلان سره ممکن دي._"
-        await query.edit_message_text(text, parse_mode="Markdown")
-
-    elif query.data == 'block':
-        blocklist = user_info.get('blocklist', [])
-        if not blocklist:
-            blocklist_text = "هیڅ بلاک شوي فرستونکی نشته."
-        else:
-            blocklist_text = "\n".join([f"• `{b}`" for b in blocklist])
-        await query.edit_message_text(
-            f"🚫 *د بلاک لیست مدیریت*\n\nاوسنی لیست:\n{blocklist_text}\n\n"
-            "د فرستونکي (برېښنالیک یا دامنه) د بلاک کولو لپاره، د /block اضافه کړئ.\n"
-            "مثال: `/block spammer@example.com`\n"
-            "د لرې کولو لپاره: `/unblock example.com`",
-            parse_mode="Markdown"
-        )
-
-    elif query.data == 'about':
-        await query.edit_message_text(
-            "ℹ️ *د بوټ په اړه*\n\n"
-            "دا بوټ ستاسو د اصلي برېښنالیک ساتنه کوي او تاسو ته لنډمهالي پتې درکوي.\n"
-            "په بشپړه توګه وړیا دی، د mail.tm خدمت کاروي.\n"
-            "ټول معلومات په خوندي ډول ساتل کیږي.\n"
-            "نسخه: 1.0",
-            parse_mode="Markdown"
-        )
-
-    elif query.data == 'transfer':
-        context.user_data['awaiting_transfer'] = True
-        await query.edit_message_text(
-            "🔄 *آدرس بل تلګرام اکاونټ ته لېږدول*\n\n"
-            "مهرباني وکړئ د هغه کارونکي آيډي (یا یوزرنیم) ولیکئ چې غواړئ خپل برېښنالیک پته ورته انتقال کړئ.\n"
-            "بڼه: `@username` یا `123456789`\n"
-            "د لغوه کولو لپاره /cancel وکاروئ.",
-            parse_mode="Markdown"
-        )
-
-# د مستقیمو کمانډونو لپاره (کله چې کارونکی /set، /phone، /transfer وټپي)
+# د /set کمانډ
 async def set_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['awaiting_set'] = True
     await update.message.reply_text(
         "⚙️ *د دودیز برېښنالیک تنظیمول*\n\n"
         "مهرباني وکړئ خپل مطلوب نوم (د '@' پرته) ولیکئ.\n"
-        "بڼه: `yourname@mail.tm`\nمثال: `ahmad`\n"
+        "بڼه به داسې وي: `yourname@mail.tm`\n\n"
+        "مثال: `ahmad`\n"
         "د لغوه کولو لپاره /cancel وکاروئ.",
         parse_mode="Markdown"
     )
 
+# د /phone کمانډ
 async def phone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['awaiting_phone'] = True
     await update.message.reply_text(
@@ -218,6 +162,64 @@ async def phone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# د /domain کمانډ - د موجودو دامنو لیست
+async def domain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    domains = ["mail.tm", "geek.it", "slushmail.com", "drdrb.com", "spam4.me"]
+    text = "🌐 *د موجودو دامنو لیست:*\n\n"
+    for d in domains:
+        text += f"• `{d}`\n"
+    text += "\n_د دامن بدلول یوازې د تادیه شوي پلان سره ممکن دي._"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+# د /block کمانډ
+async def block_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    data = load_data()
+    user_info = data.get(user_id, {})
+    blocklist = user_info.get('blocklist', [])
+    if not blocklist:
+        blocklist_text = "هیڅ بلاک شوي فرستونکی نشته."
+    else:
+        blocklist_text = "\n".join([f"• `{b}`" for b in blocklist])
+    await update.message.reply_text(
+        f"🚫 *د بلاک لیست مدیریت*\n\nاوسنی لیست:\n{blocklist_text}\n\n"
+        "د فرستونکي (برېښنالیک یا دامنه) د بلاک کولو لپاره، /block اضافه کړئ.\n"
+        "مثال: `/block spammer@example.com`\n"
+        "د لرې کولو لپاره: `/unblock example.com`",
+        parse_mode="Markdown"
+    )
+
+# د /unblock کمانډ
+async def unblock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    data = load_data()
+    user_info = data.get(user_id, {})
+    if not context.args:
+        await update.message.reply_text("مهرباني وکړئ د لرې کولو لپاره یو برېښنالیک یا دامنه ورکړئ.\nمثال: `/unblock spammer@example.com`")
+        return
+    target = context.args[0]
+    blocklist = user_info.get('blocklist', [])
+    if target in blocklist:
+        blocklist.remove(target)
+        user_info['blocklist'] = blocklist
+        data[user_id] = user_info
+        save_data(data)
+        await update.message.reply_text(f"✅ `{target}` له بلاک لیست څخه لرې شو.", parse_mode="Markdown")
+    else:
+        await update.message.reply_text(f"⚠️ `{target}` په بلاک لیست کې نه و.", parse_mode="Markdown")
+
+# د /about کمانډ
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "ℹ️ *د بوټ په اړه*\n\n"
+        "دا بوټ ستاسو د اصلي برېښنالیک ساتنه کوي او تاسو ته لنډمهالي پتې درکوي.\n"
+        "په بشپړه توګه وړیا دی، د mail.tm خدمت کاروي.\n"
+        "ټول معلومات په خوندي ډول ساتل کیږي.\n"
+        "نسخه: 1.0",
+        parse_mode="Markdown"
+    )
+
+# د /transfer کمانډ
 async def transfer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['awaiting_transfer'] = True
     await update.message.reply_text(
@@ -228,13 +230,42 @@ async def transfer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# د متن پیغامونو اداره کول (د /set، /phone، /transfer ځوابونه)
+# د /cancel کمانډ
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text("❌ ټول انتظار حالتونه لغوه شول. له مینو څخه بیا پیل کړئ.")
+
+# د /read کمانډ - د پیغام لوستل
+async def read_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    data = load_data()
+    user_info = data.get(user_id, {})
+    if not context.args:
+        await update.message.reply_text("مهرباني وکړئ د پیغام آيډي ورکړئ.\nمثال: `/read 12345`")
+        return
+    msg_id = context.args[0]
+    email = user_info.get('email')
+    password = user_info.get('password')
+    if not email or not password:
+        await update.message.reply_text("لومړی /generate وکاروئ.")
+        return
+    content = get_message_content(email, password, msg_id)
+    if content:
+        await update.message.reply_text(
+            f"📄 *بشپړ متن:*\n\n{content}",
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text("❌ پیغام ونه موندل شو یا لاسرسی نشته.")
+
+# ---------- د متن پیغامونو اداره کول (د کیبورد تڼیو لپاره) ----------
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     text = update.message.text
     data = load_data()
     user_info = data.get(user_id, {})
 
+    # که کارونکی د /set یا /phone یا /transfer په انتظار کې وي
     if context.user_data.get('awaiting_set'):
         custom_name = text.strip().lower()
         if '@' in custom_name:
@@ -257,8 +288,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ دا نوم لا دمخه نیول شوی یا ناسم دی. بله هڅه وکړئ.")
         context.user_data['awaiting_set'] = False
+        return
 
-    elif context.user_data.get('awaiting_phone'):
+    if context.user_data.get('awaiting_phone'):
         phone = text.strip()
         if phone.startswith('+') and len(phone) > 8:
             user_info['phone'] = phone
@@ -268,8 +300,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ ناسمه بڼه. مهرباني وکړئ د + او هیواد کوډ سره ولیکئ.")
         context.user_data['awaiting_phone'] = False
+        return
 
-    elif context.user_data.get('awaiting_transfer'):
+    if context.user_data.get('awaiting_transfer'):
         target = text.strip()
         user_info['transfer_to'] = target
         data[user_id] = user_info
@@ -280,74 +313,27 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         context.user_data['awaiting_transfer'] = False
+        return
 
+    # که کارونکی د کیبورد تڼۍ کلیک کړی وي، د هغې په مطابق کمانډ اجرا کړئ
+    if text == "📧 Get a new fake mail id":
+        await generate(update, context)
+    elif text == "🆔 Current fake mail id":
+        await show_id(update, context)
+    elif text == "⚙️ Setup custom fake mail id":
+        await set_command(update, context)
+    elif text == "📱 Add/update recovery phone":
+        await phone_command(update, context)
+    elif text == "🌐 Manage custom domains":
+        await domain_command(update, context)
+    elif text == "🚫 Manage Blocklist":
+        await block_command(update, context)
+    elif text == "ℹ️ About this bot":
+        await about_command(update, context)
+    elif text == "🔄 Transfer Address":
+        await transfer_command(update, context)
     else:
         await update.message.reply_text("مهرباني وکړئ له مینو څخه یوه تڼۍ وټاکئ یا یو معتبر کمانډ وکاروئ.")
-
-# د /cancel کمانډ
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await update.message.reply_text("❌ ټول انتظار حالتونه لغوه شول. له مینو څخه بیا پیل کړئ.")
-
-# د /block او /unblock کمانډونه
-async def block(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    data = load_data()
-    user_info = data.get(user_id, {})
-    if not context.args:
-        await update.message.reply_text("مهرباني وکړئ د بلاک کولو لپاره یو برېښنالیک یا دامنه ورکړئ.\nمثال: `/block spammer@example.com`")
-        return
-    target = context.args[0]
-    blocklist = user_info.get('blocklist', [])
-    if target not in blocklist:
-        blocklist.append(target)
-        user_info['blocklist'] = blocklist
-        data[user_id] = user_info
-        save_data(data)
-        await update.message.reply_text(f"✅ `{target}` بلاک شو.", parse_mode="Markdown")
-    else:
-        await update.message.reply_text(f"⚠️ `{target}` لا دمخه په بلاک لیست کې دی.", parse_mode="Markdown")
-
-async def unblock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    data = load_data()
-    user_info = data.get(user_id, {})
-    if not context.args:
-        await update.message.reply_text("مهرباني وکړئ د لرې کولو لپاره یو برېښنالیک یا دامنه ورکړئ.\nمثال: `/unblock spammer@example.com`")
-        return
-    target = context.args[0]
-    blocklist = user_info.get('blocklist', [])
-    if target in blocklist:
-        blocklist.remove(target)
-        user_info['blocklist'] = blocklist
-        data[user_id] = user_info
-        save_data(data)
-        await update.message.reply_text(f"✅ `{target}` له بلاک لیست څخه لرې شو.", parse_mode="Markdown")
-    else:
-        await update.message.reply_text(f"⚠️ `{target}` په بلاک لیست کې نه و.", parse_mode="Markdown")
-
-# د /read کمانډ - د یو پیغام بشپړ لوستل
-async def read(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    data = load_data()
-    user_info = data.get(user_id, {})
-    if not context.args:
-        await update.message.reply_text("مهرباني وکړئ د پیغام آيډي ورکړئ.\nمثال: `/read 12345`")
-        return
-    msg_id = context.args[0]
-    email = user_info.get('email')
-    password = user_info.get('password')
-    if not email or not password:
-        await update.message.reply_text("لومړی /generate وکاروئ.")
-        return
-    content = get_message_content(email, password, msg_id)
-    if content:
-        await update.message.reply_text(
-            f"📄 *بشپړ متن:*\n\n{content}",
-            parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text("❌ پیغام ونه موندل شو یا لاسرسی نشته.")
 
 # ---------- د ریښتني وخت خبرتیاوې (JobQueue) ----------
 async def check_emails(context: ContextTypes.DEFAULT_TYPE):
@@ -391,18 +377,19 @@ def main():
 
     # کمانډونه
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("generate", generate))
+    app.add_handler(CommandHandler("id", show_id))
     app.add_handler(CommandHandler("set", set_command))
     app.add_handler(CommandHandler("phone", phone_command))
+    app.add_handler(CommandHandler("domain", domain_command))
+    app.add_handler(CommandHandler("block", block_command))
+    app.add_handler(CommandHandler("unblock", unblock_command))
+    app.add_handler(CommandHandler("about", about_command))
     app.add_handler(CommandHandler("transfer", transfer_command))
-    app.add_handler(CommandHandler("block", block))
-    app.add_handler(CommandHandler("unblock", unblock))
-    app.add_handler(CommandHandler("read", read))
+    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("read", read_command))
 
-    # د مینو تڼیو لپاره
-    app.add_handler(CallbackQueryHandler(button_handler))
-
-    # د متن پیغامونو لپاره (د /set، /phone، /transfer ځوابونه)
+    # د متن پیغامونو لپاره (د کیبورد تڼیو او نورو متنونو لپاره)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     # د JobQueue تنظیمول - هر ۳۰ ثانیې یو ځل چک کول
